@@ -71,6 +71,7 @@ public class Door : MonoBehaviour
         isOpen = false;
 
         SetVisualState(false);
+        AudioManager.Instance?.PlayDoorClose();
 
         if (animationCoroutine != null)
             StopCoroutine(animationCoroutine);

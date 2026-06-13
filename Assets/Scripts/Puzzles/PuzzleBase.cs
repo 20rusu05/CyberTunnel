@@ -51,16 +51,18 @@ public abstract class PuzzleBase : MonoBehaviour
         }
         else
         {
-            string feedback = currentAttempts >= maxAttempts
-                ? "ACCESS DENIED - Too many attempts"
-                : $"INCORRECT - {RemainingAttempts} attempts remaining";
+            GameManager.Instance?.ConsumeGlobalAttempt();
+            int globalLeft = GameManager.Instance != null ? GameManager.Instance.RemainingGlobalAttempts : -1;
+            string feedback = globalLeft >= 0
+                ? $"INCORRECT - GLOBAL ATTEMPTS LEFT: {globalLeft}"
+                : "INCORRECT";
 
             OnFeedback?.Invoke(feedback);
 
             if (currentAttempts >= maxAttempts)
             {
-                OnPuzzleFailed?.Invoke();
-                AudioManager.Instance?.PlayPuzzleFailed();
+                // Legacy per-puzzle cap kept as soft threshold only.
+                // Global attempts now control game over.
             }
         }
     }

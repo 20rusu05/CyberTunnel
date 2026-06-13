@@ -1,5 +1,6 @@
 using UnityEngine;
 using TMPro;
+using UnityEngine.UI;
 
 public class HUDManager : MonoBehaviour
 {
@@ -23,10 +24,19 @@ public class HUDManager : MonoBehaviour
     [SerializeField] private TextMeshProUGUI completionTimeText;
     [SerializeField] private TextMeshProUGUI completionMessageText;
 
+    [Header("Global Attempts / Lose Screen")]
+    [SerializeField] private TextMeshProUGUI attemptsText;
+    [SerializeField] private GameObject losePanel;
+    [SerializeField] private TextMeshProUGUI loseMessageText;
+    [SerializeField] private Button tryAgainButton;
+
     private void Start()
     {
         if (completionPanel != null)
             completionPanel.SetActive(false);
+        if (losePanel != null)
+            losePanel.SetActive(false);
+        tryAgainButton?.onClick.AddListener(OnTryAgainClicked);
 
         var gm = GameManager.Instance;
         if (gm != null)
@@ -34,6 +44,9 @@ public class HUDManager : MonoBehaviour
             gm.OnTimerUpdated.AddListener(UpdateTimer);
             gm.OnRoomCompleted.AddListener(UpdateRoomProgress);
             gm.OnAllRoomsCompleted.AddListener(ShowCompletionScreen);
+            gm.OnGlobalAttemptsChanged.AddListener(UpdateGlobalAttempts);
+            gm.OnGameLost.AddListener(ShowLoseScreen);
+            UpdateGlobalAttempts(gm.RemainingGlobalAttempts);
         }
     }
 
@@ -123,7 +136,33 @@ public class HUDManager : MonoBehaviour
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
 
-        StartCoroutine(HideCompletionAfterDelay(10f));
+        StartCoroutine(HideCompletionAfterDelay(3f));
+    }
+
+    private void UpdateGlobalAttempts(int remaining)
+    {
+        if (attemptsText != null)
+            attemptsText.text = $"Attempts Left: {remaining}";
+    }
+
+    private void ShowLoseScreen()
+    {
+        PuzzleUIManager.Instance?.ClosePuzzle();
+        SetInteractPrompt(false);
+        if (crosshair != null) crosshair.SetActive(false);
+
+        if (losePanel != null)
+            losePanel.SetActive(true);
+        if (loseMessageText != null)
+            loseMessageText.text = "You used all attempts.";
+
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+    }
+
+    private void OnTryAgainClicked()
+    {
+        GameManager.Instance?.RetryFromLobby();
     }
 
     private System.Collections.IEnumerator HideCompletionAfterDelay(float delay)
@@ -156,6 +195,10 @@ public class HUDManager : MonoBehaviour
             gm.OnTimerUpdated.RemoveListener(UpdateTimer);
             gm.OnRoomCompleted.RemoveListener(UpdateRoomProgress);
             gm.OnAllRoomsCompleted.RemoveListener(ShowCompletionScreen);
+            gm.OnGlobalAttemptsChanged.RemoveListener(UpdateGlobalAttempts);
+            gm.OnGameLost.RemoveListener(ShowLoseScreen);
         }
+
+        tryAgainButton?.onClick.RemoveListener(OnTryAgainClicked);
     }
 }

@@ -11,6 +11,8 @@ public class LavaRespawnZone : MonoBehaviour
         CharacterController cc = other.GetComponent<CharacterController>();
         if (cc == null) return;
 
+        AudioManager.Instance?.PlayLavaDeath();
+
         cc.enabled = false;
         other.transform.position = respawnPosition;
         cc.enabled = true;

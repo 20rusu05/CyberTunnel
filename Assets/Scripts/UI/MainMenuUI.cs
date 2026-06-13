@@ -4,6 +4,9 @@ using TMPro;
 
 public class MainMenuUI : MonoBehaviour
 {
+    private const string MusicVolumePref = "musicVolume";
+    private const string SfxVolumePref = "sfxVolume";
+
     [Header("Panels")]
     [SerializeField] private GameObject mainPanel;
     [SerializeField] private GameObject settingsPanel;
@@ -44,7 +47,22 @@ public class MainMenuUI : MonoBehaviour
         musicVolumeSlider?.onValueChanged.AddListener(OnMusicVolumeChanged);
         sfxVolumeSlider?.onValueChanged.AddListener(OnSFXVolumeChanged);
 
+        InitializeAudioSettingsUI();
         SetupQualityDropdown();
+    }
+
+    private void InitializeAudioSettingsUI()
+    {
+        float musicValue = PlayerPrefs.GetFloat(MusicVolumePref, 0.3f);
+        float sfxValue = PlayerPrefs.GetFloat(SfxVolumePref, 1f);
+
+        if (musicVolumeSlider != null)
+            musicVolumeSlider.SetValueWithoutNotify(musicValue);
+        if (sfxVolumeSlider != null)
+            sfxVolumeSlider.SetValueWithoutNotify(sfxValue);
+
+        AudioManager.Instance?.SetMusicVolume(musicValue);
+        AudioManager.Instance?.SetSFXVolume(sfxValue);
     }
 
     private void ShowMainPanel()

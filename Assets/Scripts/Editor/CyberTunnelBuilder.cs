@@ -9,6 +9,13 @@ using UnityEngine.SceneManagement;
 
 public class CyberTunnelBuilder : EditorWindow
 {
+    const string DefaultMusicAssetPath = "Assets/Audio/musicwallah-no-copyright-gaming-background-music-for-minecraftgaming-405002.mp3";
+    const string DoorOpenCloseSfxAssetPath = "Assets/Audio/door-open-close-sfx.mp3";
+    const string LevelUnlockedSfxAssetPath = "Assets/Audio/SoundPack01/Rise04.aif";
+    const string GameLostSfxAssetPath = "Assets/Audio/you-lost-negative-beeps.mp3";
+    const string LavaSizzleSfxAssetPath = "Assets/Audio/SoundPack01/FX02.aif";
+    const string LavaScreamSfxAssetPath = "Assets/Audio/SoundPack01/Downer01.aif";
+
     [MenuItem("CyberTunnel/Build Entire Game %#g")]
     public static void BuildAll()
     {
@@ -49,7 +56,7 @@ public class CyberTunnelBuilder : EditorWindow
     static Material matTerminalBody, matTerminalScreen, matTerminalScreenOff;
     static Material matNeonCyan, matNeonGreen, matNeonMagenta, matNeonRed, matNeonBlue;
     static Material matTrim, matLava;
-    static Material matDiscoTile, matDiscoBall;
+    static Material matDiscoTile, matDiscoBall, matGold;
 
     static void CreateMaterials()
     {
@@ -111,6 +118,9 @@ public class CyberTunnelBuilder : EditorWindow
         matDiscoBall = GetOrCreateMaterial(folder, "M_DiscoBall", urpLit,
             new Color(0.88f, 0.88f, 0.92f), 0.95f, 0.92f);
 
+        matGold = GetOrCreateMaterial(folder, "M_Gold", urpLit,
+            new Color(1f, 0.78f, 0.05f), 0.9f, 1f);
+
         AssetDatabase.SaveAssets();
     }
 
@@ -171,6 +181,36 @@ public class CyberTunnelBuilder : EditorWindow
         new Color(1f, 0.6f, 0f),
         new Color(0.3f, 0.5f, 1f)
     };
+
+    static AudioClip GetDefaultMusicClip()
+    {
+        return AssetDatabase.LoadAssetAtPath<AudioClip>(DefaultMusicAssetPath);
+    }
+
+    static AudioClip GetDoorOpenCloseSfxClip()
+    {
+        return AssetDatabase.LoadAssetAtPath<AudioClip>(DoorOpenCloseSfxAssetPath);
+    }
+
+    static AudioClip GetLevelUnlockedSfxClip()
+    {
+        return AssetDatabase.LoadAssetAtPath<AudioClip>(LevelUnlockedSfxAssetPath);
+    }
+
+    static AudioClip GetGameLostSfxClip()
+    {
+        return AssetDatabase.LoadAssetAtPath<AudioClip>(GameLostSfxAssetPath);
+    }
+
+    static AudioClip GetLavaSizzleSfxClip()
+    {
+        return AssetDatabase.LoadAssetAtPath<AudioClip>(LavaSizzleSfxAssetPath);
+    }
+
+    static AudioClip GetLavaScreamSfxClip()
+    {
+        return AssetDatabase.LoadAssetAtPath<AudioClip>(LavaScreamSfxAssetPath);
+    }
 
     static void BuildGameScene()
     {
@@ -252,9 +292,10 @@ public class CyberTunnelBuilder : EditorWindow
         exitDoor.transform.SetParent(envRoot.transform);
         doorObjects.Add(exitDoor);
 
-        // -- Exit room (victory area) --
-        float exitZ = lastRoomZ + ROOM_DEPTH / 2f + CORRIDOR_LENGTH / 2f;
-        BuildExitArea(new Vector3(0, ROOM_HEIGHT / 2f, exitZ + CORRIDOR_LENGTH), envRoot.transform);
+        // -- Exit room (victory area) starts immediately at the exit door — no corridor gap --
+        // Center = door Z + half the exit area size (10/2 = 5) so entry wall is flush with the door.
+        float exitAreaCenter = lastRoomZ + ROOM_DEPTH / 2f + 5f;
+        BuildExitArea(new Vector3(0, ROOM_HEIGHT / 2f, exitAreaCenter), envRoot.transform);
 
         // -- Wire up GameManager + Room components --
         GameObject gmObj = new GameObject("GameManager");
@@ -297,6 +338,16 @@ public class CyberTunnelBuilder : EditorWindow
         }
 
         SerializedObject gmSo = new SerializedObject(gm);
+        gmSo.FindProperty("lobbyEntryDoor").objectReferenceValue = entryDoorScript;
+
+        SerializedProperty exitDoors = gmSo.FindProperty("roomExitDoors");
+        exitDoors.arraySize = doorObjects.Count;
+        for (int j = 0; j < doorObjects.Count; j++)
+        {
+            Door d = doorObjects[j].GetComponentInChildren<Door>();
+            exitDoors.GetArrayElementAtIndex(j).objectReferenceValue = d;
+        }
+
         SerializedProperty roomsList = gmSo.FindProperty("rooms");
         roomsList.arraySize = roomScripts.Count;
         for (int i = 0; i < roomScripts.Count; i++)
@@ -316,6 +367,13 @@ public class CyberTunnelBuilder : EditorWindow
         SerializedObject amSo = new SerializedObject(audioObj.GetComponent<AudioManager>());
         amSo.FindProperty("musicSource").objectReferenceValue = musicSrc;
         amSo.FindProperty("sfxSource").objectReferenceValue = sfxSrc;
+        amSo.FindProperty("backgroundMusicClip").objectReferenceValue = GetDefaultMusicClip();
+        amSo.FindProperty("doorOpenClip").objectReferenceValue = GetDoorOpenCloseSfxClip();
+        amSo.FindProperty("doorCloseClip").objectReferenceValue = GetDoorOpenCloseSfxClip();
+        amSo.FindProperty("levelUnlockedClip").objectReferenceValue = GetLevelUnlockedSfxClip();
+        amSo.FindProperty("gameLostClip").objectReferenceValue = GetGameLostSfxClip();
+        amSo.FindProperty("lavaSizzleClip").objectReferenceValue = GetLavaSizzleSfxClip();
+        amSo.FindProperty("lavaScreamClip").objectReferenceValue = GetLavaScreamSfxClip();
         amSo.ApplyModifiedPropertiesWithoutUndo();
 
         // -- Scene Loader --
@@ -506,6 +564,9 @@ public class CyberTunnelBuilder : EditorWindow
         if (index == 2)
             BuildBinaryDecodeRoomWallText(room.transform, hw, wt);
 
+        // ── Generic decorations for all rooms ──────────────────────────────
+        AddRoomDecorations(index, room.transform, hw, hh, hd, wt, floorYLift, accentMat);
+
         // Room 0: lava with 3 small platforms (3 = Caesar shift key)
         if (index == 0)
         {
@@ -549,6 +610,178 @@ public class CyberTunnelBuilder : EditorWindow
     }
 
     // ─────────────────────────────────────────────
+    //  ROOM DECORATIONS
+    // ─────────────────────────────────────────────
+
+    static void AddRoomDecorations(int index, Transform room,
+        float hw, float hh, float hd, float wt, float floorY, Material accentMat)
+    {
+        // ── Corner pillars ───────────────────────────────────────────────────
+        float pillarW = 0.25f;
+        float[] xs = { -hw + wt + pillarW / 2f,  hw - wt - pillarW / 2f };
+        float[] zs = { -hd + wt + pillarW / 2f,  hd - wt - pillarW / 2f };
+        int pIdx = 0;
+        foreach (float px in xs)
+            foreach (float pz in zs)
+                CreateBox($"Pillar_{pIdx++}", room,
+                    new Vector3(px, 0, pz),
+                    new Vector3(pillarW, ROOM_HEIGHT, pillarW), accentMat);
+
+        // ── Server rack units on left wall ───────────────────────────────────
+        float rackDepth = 0.35f;
+        float rackW     = 1.1f;
+        float rackH     = ROOM_HEIGHT * 0.65f;
+        float rackY     = -hh + floorY + rackH / 2f;
+        float[] rackZs  = { -hd * 0.45f, hd * 0.45f };
+        foreach (var rz in rackZs)
+        {
+            // Rack body
+            CreateBox("Rack_Body", room,
+                new Vector3(-hw + wt + rackDepth / 2f, rackY, rz),
+                new Vector3(rackDepth, rackH, rackW), matTerminalBody);
+            // Blinking status strip
+            CreateBox("Rack_Strip", room,
+                new Vector3(-hw + wt + rackDepth + 0.01f, rackY + rackH * 0.3f, rz),
+                new Vector3(0.02f, rackH * 0.05f, rackW * 0.8f), accentMat);
+            // Drive slots (3 thin lines)
+            for (int s = 0; s < 4; s++)
+            {
+                float sy = rackY - rackH * 0.2f + s * (rackH * 0.12f);
+                CreateBox($"RackSlot_{s}", room,
+                    new Vector3(-hw + wt + rackDepth + 0.01f, sy, rz),
+                    new Vector3(0.02f, 0.04f, rackW * 0.7f), matTerminalScreen);
+            }
+        }
+
+        // ── Horizontal cable conduit on right wall ───────────────────────────
+        CreateBox("CableConduit", room,
+            new Vector3(hw - wt - 0.08f, -hh + floorY + 1.2f, 0),
+            new Vector3(0.12f, 0.1f, ROOM_DEPTH - 1.0f), matTerminalBody);
+        // Small clips along the conduit
+        for (int c = 0; c < 5; c++)
+        {
+            float cz = -hd * 0.7f + c * (hd * 0.35f);
+            CreateBox($"Clip_{c}", room,
+                new Vector3(hw - wt - 0.04f, -hh + floorY + 1.2f, cz),
+                new Vector3(0.06f, 0.18f, 0.06f), accentMat);
+        }
+
+        // ── Ceiling light housing strips ─────────────────────────────────────
+        CreateBox("LightHousing_F", room,
+            new Vector3(0, hh - wt - 0.07f, -hd * 0.4f),
+            new Vector3(ROOM_WIDTH * 0.5f, 0.08f, 0.18f), matTerminalBody);
+        CreateBox("LightHousing_B", room,
+            new Vector3(0, hh - wt - 0.07f,  hd * 0.4f),
+            new Vector3(ROOM_WIDTH * 0.5f, 0.08f, 0.18f), matTerminalBody);
+
+        // ── Warning hazard stripes on floor edges ────────────────────────────
+        if (index != 0) // skip lava room floor
+        {
+            float stripeY = -hh + floorY + wt + 0.01f;
+            // Front & back stripes
+            for (int stripe = -1; stripe <= 1; stripe += 2)
+            {
+                CreateBox($"HazardStripe_{(stripe < 0 ? "B" : "F")}", room,
+                    new Vector3(0, stripeY, stripe * (hd - 0.15f)),
+                    new Vector3(ROOM_WIDTH - 0.6f, 0.02f, 0.15f), matNeonRed);
+            }
+        }
+
+        // ── Decorative screens / wall panels on front wall ───────────────────
+        float panelW = 1.2f;
+        float panelH = 0.7f;
+        float[] panelXs = { -hw * 0.45f, hw * 0.45f };
+        foreach (float px in panelXs)
+        {
+            CreateBox("WallPanel_Frame", room,
+                new Vector3(px, 0.4f, hd - wt - 0.02f),
+                new Vector3(panelW + 0.1f, panelH + 0.1f, 0.04f), matTerminalBody);
+            CreateBox("WallPanel_Screen", room,
+                new Vector3(px, 0.4f, hd - wt - 0.005f),
+                new Vector3(panelW, panelH, 0.02f), accentMat);
+        }
+
+        // ── Room-specific props ──────────────────────────────────────────────
+        switch (index)
+        {
+            case 0: // Caesar / Lava — danger signs & heat vents
+                CreateBox("HeatVent_L", room,
+                    new Vector3(-hw + wt + 0.05f, 0.8f, 0),
+                    new Vector3(0.05f, 0.6f, 1.0f), matNeonRed);
+                CreateBox("HeatVent_R", room,
+                    new Vector3( hw - wt - 0.05f, 0.8f, 0),
+                    new Vector3(0.05f, 0.6f, 1.0f), matNeonRed);
+                // Danger warning panel above entry
+                CreateBox("DangerPanel", room,
+                    new Vector3(0, hh - 0.9f, -hd + wt + 0.03f),
+                    new Vector3(1.8f, 0.35f, 0.04f), matNeonRed);
+                break;
+
+            case 1: // Vigenère — cipher wheel / rotor rings
+                for (int ring = 0; ring < 3; ring++)
+                {
+                    float ry = -hh + 0.6f + ring * 0.22f;
+                    CreateBox($"Ring_{ring}", room,
+                        new Vector3(hw - wt - 0.06f, ry, 2.5f - ring * 0.5f),
+                        new Vector3(0.06f, 0.1f, 0.8f - ring * 0.1f), matNeonCyan);
+                }
+                // Extra monitor on back wall
+                CreateBox("ExtraMonitor", room,
+                    new Vector3(hw * 0.4f, 0.6f, -hd + wt + 0.03f),
+                    new Vector3(1.4f, 0.85f, 0.05f), matTerminalScreen);
+                break;
+
+            case 2: // Binary — binary pattern pillars
+                for (int b = 0; b < 6; b++)
+                {
+                    float bz = -hd * 0.55f + b * (hd * 0.22f);
+                    float bh = 0.05f + (b % 2) * 0.04f;
+                    CreateBox($"BinBar_{b}", room,
+                        new Vector3(hw - wt - 0.04f, -hh + floorY + bh / 2f + wt, bz),
+                        new Vector3(0.04f, bh, 0.25f), matNeonMagenta);
+                }
+                // Wide binary display panel
+                CreateBox("BinaryDisplay", room,
+                    new Vector3(-hw * 0.3f, 1.0f, hd - wt - 0.03f),
+                    new Vector3(2.8f, 0.5f, 0.04f), matTerminalScreen);
+                break;
+
+            case 3: // IP/Network — patch panel + cable bundles
+                // Patch panel
+                CreateBox("PatchPanel", room,
+                    new Vector3(hw - wt - 0.04f, 0.2f, -1.5f),
+                    new Vector3(0.06f, 0.5f, 2.2f), matTerminalBody);
+                for (int p = 0; p < 8; p++)
+                {
+                    float pz = -1.4f + p * 0.35f;
+                    CreateBox($"Port_{p}", room,
+                        new Vector3(hw - wt - 0.01f, 0.2f, pz),
+                        new Vector3(0.02f, 0.12f, 0.18f), (p % 2 == 0) ? matNeonRed : matNeonGreen);
+                }
+                break;
+
+            case 4: // Definitions — bookshelf/archive look
+                for (int shelf = 0; shelf < 4; shelf++)
+                {
+                    float sy = -hh + 0.5f + shelf * 0.65f;
+                    CreateBox($"Shelf_{shelf}", room,
+                        new Vector3(-hw + wt + 0.22f, sy, -0.5f),
+                        new Vector3(0.4f, 0.08f, 3.2f), matTerminalBody);
+                    // Books as thin slabs
+                    for (int bk = 0; bk < 7; bk++)
+                    {
+                        float bkz = -1.4f + bk * 0.45f;
+                        Material bkMat = (bk % 3 == 0) ? accentMat : matTerminalBody;
+                        CreateBox($"Book_{shelf}_{bk}", room,
+                            new Vector3(-hw + wt + 0.22f, sy + 0.25f, bkz),
+                            new Vector3(0.35f, 0.42f, 0.12f), bkMat);
+                    }
+                }
+                break;
+        }
+    }
+
+    // ─────────────────────────────────────────────
     //  BUILD CORRIDOR
     // ─────────────────────────────────────────────
 
@@ -576,6 +809,39 @@ public class CyberTunnelBuilder : EditorWindow
         CreateBox("Trim_Floor", corridor.transform,
             new Vector3(0, -hh + wt + 0.02f, 0),
             new Vector3(0.08f, 0.02f, CORRIDOR_LENGTH), matNeonCyan);
+
+        // Hazard warning stripes on floor sides
+        CreateBox("HazardLeft",  corridor.transform,
+            new Vector3(-hw + wt + 0.1f, -hh + wt + 0.01f, 0),
+            new Vector3(0.18f, 0.02f, CORRIDOR_LENGTH), matNeonRed);
+        CreateBox("HazardRight", corridor.transform,
+            new Vector3( hw - wt - 0.1f, -hh + wt + 0.01f, 0),
+            new Vector3(0.18f, 0.02f, CORRIDOR_LENGTH), matNeonRed);
+
+        // Pipe running along left wall
+        CreateBox("Pipe_L", corridor.transform,
+            new Vector3(-hw + wt + 0.08f, 0.5f, 0),
+            new Vector3(0.12f, 0.12f, CORRIDOR_LENGTH), matTerminalBody);
+        // Pipe brackets
+        int numBrackets = Mathf.Max(2, (int)(CORRIDOR_LENGTH / 2.5f));
+        for (int b = 0; b < numBrackets; b++)
+        {
+            float bz = -hl * 0.8f + b * (CORRIDOR_LENGTH * 0.8f / Mathf.Max(1, numBrackets - 1));
+            CreateBox($"PipeBracket_{b}", corridor.transform,
+                new Vector3(-hw + wt + 0.18f, 0.5f, bz),
+                new Vector3(0.18f, 0.25f, 0.06f), matNeonCyan);
+        }
+
+        // Emergency light panels on ceiling — alternating red/blue
+        int numPanels = Mathf.Max(2, (int)(CORRIDOR_LENGTH / 3f));
+        for (int p = 0; p < numPanels; p++)
+        {
+            float pz = -hl * 0.85f + p * (CORRIDOR_LENGTH * 0.85f / Mathf.Max(1, numPanels - 1));
+            Material panelMat = (p % 2 == 0) ? matNeonRed : matNeonBlue;
+            CreateBox($"EmergPanel_{p}", corridor.transform,
+                new Vector3(0, hh - wt - 0.04f, pz),
+                new Vector3(0.5f, 0.06f, 0.25f), panelMat);
+        }
 
         // Corridor light
         GameObject lightObj = new GameObject("CorridorLight");
@@ -856,12 +1122,8 @@ public class CyberTunnelBuilder : EditorWindow
             l.range = 5f;
         }
 
-        // "EXIT" sign neon
-        CreateBox("ExitSign", exit.transform,
-            new Vector3(0, hh - 0.5f, size / 2f - 0.5f),
-            new Vector3(2f, 0.5f, 0.05f), matNeonGreen);
 
-        // Trophy pedestal (stepped)
+        // ── Trophy pedestal ───────────────────────────────────────────────────
         CreateBox("Pedestal_Base", exit.transform,
             new Vector3(0, -hh + 0.2f, 1.5f), new Vector3(2.2f, 0.4f, 2.2f), matTerminalBody);
         CreateBox("Pedestal_Step", exit.transform,
@@ -869,27 +1131,102 @@ public class CyberTunnelBuilder : EditorWindow
         CreateBox("Pedestal_Top", exit.transform,
             new Vector3(0, -hh + 0.85f, 1.5f), new Vector3(1.4f, 0.3f, 1.4f), matNeonCyan);
 
-        // Trophy cup
-        CreateBox("Trophy_Stem", exit.transform,
-            new Vector3(0, -hh + 1.2f, 1.5f), new Vector3(0.25f, 0.4f, 0.25f), matNeonGreen);
-        CreateBox("Trophy_Cup", exit.transform,
-            new Vector3(0, -hh + 1.7f, 1.5f), new Vector3(0.9f, 0.7f, 0.9f), matNeonGreen);
-        CreateBox("Trophy_Rim", exit.transform,
-            new Vector3(0, -hh + 2.1f, 1.5f), new Vector3(1.1f, 0.1f, 1.1f), matNeonGreen);
-        CreateBox("Trophy_Handle_L", exit.transform,
-            new Vector3(-0.65f, -hh + 1.7f, 1.5f), new Vector3(0.15f, 0.35f, 0.15f), matNeonGreen);
-        CreateBox("Trophy_Handle_R", exit.transform,
-            new Vector3(0.65f, -hh + 1.7f, 1.5f), new Vector3(0.15f, 0.35f, 0.15f), matNeonGreen);
+        // ── Trophy FBX (WinnerCup) — gold material applied to all renderers ──
+        GameObject winnerCupPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Models/WinnerCup.fbx");
+        if (winnerCupPrefab != null)
+        {
+            GameObject t = (GameObject)PrefabUtility.InstantiatePrefab(winnerCupPrefab);
+            t.name = "Trophy_WinnerCup";
+            t.transform.SetParent(exit.transform);
+            t.transform.localPosition = new Vector3(0f, 0.367f, 1.5f);
+            t.transform.localRotation = Quaternion.Euler(0f, -271.3f, 0f);
+            t.transform.localScale    = new Vector3(0.6f, 0.6f, 0.6f);
 
-        // Trophy glow
+            // Paint every sub-mesh gold
+            foreach (var r in t.GetComponentsInChildren<Renderer>())
+            {
+                var mats = new Material[r.sharedMaterials.Length];
+                for (int m = 0; m < mats.Length; m++) mats[m] = matGold;
+                r.sharedMaterials = mats;
+            }
+
+            // Solid collider — MeshCollider on each child mesh so player can't walk through it
+            foreach (var mf in t.GetComponentsInChildren<MeshFilter>())
+            {
+                if (mf.sharedMesh == null) continue;
+                MeshCollider mc = mf.gameObject.AddComponent<MeshCollider>();
+                mc.sharedMesh = mf.sharedMesh;
+                mc.convex     = true;   // convex required for non-trigger rigidbody interaction
+            }
+
+            // Extra BoxCollider around the base/foot so the player is fully blocked at ground level
+            BoxCollider footBlock = t.AddComponent<BoxCollider>();
+            footBlock.center = new Vector3(0f, -0.5f, 0f);
+            footBlock.size   = new Vector3(0.6f, 0.3f, 0.6f);
+        }
+
+        // Gold glow
         GameObject trophyLight = new GameObject("TrophyLight");
         trophyLight.transform.SetParent(exit.transform);
         trophyLight.transform.localPosition = new Vector3(0, -hh + 2.5f, 1.5f);
         Light tl = trophyLight.AddComponent<Light>();
         tl.type = LightType.Point;
-        tl.color = new Color(0.2f, 1f, 0.4f);
+        tl.color = new Color(1f, 0.85f, 0.2f);
         tl.intensity = 15f;
         tl.range = 5f;
+
+        // ── Confetti trigger (Lana Studio — Confetti_blast_multicolor) ───────
+        const string blastPrefabPath       = "Assets/Lana Studio/Hyper Casual FX/Prefabs/Confetti/Confetti_blast_multicolor.prefab";
+        const string directionalPrefabPath = "Assets/Lana Studio/Hyper Casual FX/Prefabs/Confetti/Confetti_directional_multicolor.prefab";
+        GameObject blastPrefab       = AssetDatabase.LoadAssetAtPath<GameObject>(blastPrefabPath);
+        GameObject directionalPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(directionalPrefabPath);
+
+        GameObject triggerObj = new GameObject("ConfettiTrigger");
+        triggerObj.transform.SetParent(exit.transform);
+        triggerObj.transform.localPosition = new Vector3(0, 0, -size / 2f + 0.5f);
+        var triggerBox = triggerObj.AddComponent<BoxCollider>();
+        triggerBox.isTrigger = true;
+        triggerBox.size = new Vector3(CORRIDOR_WIDTH, ROOM_HEIGHT, 1f);
+        triggerObj.AddComponent<ConfettiTrigger>();
+
+        // Spread blast emitters across ceiling of the exit room
+        Vector3[] blastPositions =
+        {
+            new Vector3(-size / 2f + 1.2f, hh - 0.2f, -size / 4f),
+            new Vector3( size / 2f - 1.2f, hh - 0.2f, -size / 4f),
+            new Vector3(0f,                hh - 0.2f,  0f),
+            new Vector3(-size / 4f,        hh - 0.2f,  size / 4f),
+            new Vector3( size / 4f,        hh - 0.2f,  size / 4f),
+            new Vector3(-size / 2f + 1.2f, hh - 0.2f,  size / 3f),
+            new Vector3( size / 2f - 1.2f, hh - 0.2f,  size / 3f),
+        };
+
+        for (int i = 0; i < blastPositions.Length; i++)
+        {
+            if (blastPrefab == null) break;
+            var inst = (GameObject)PrefabUtility.InstantiatePrefab(blastPrefab);
+            inst.transform.SetParent(triggerObj.transform);
+            inst.transform.localPosition = blastPositions[i] - triggerObj.transform.localPosition;
+            inst.name = $"ConfettiBlast_{i}";
+        }
+
+        // Directional emitters shooting upward from floor level
+        Vector3[] dirPositions =
+        {
+            new Vector3(-2f, -hh + 0.1f, -1f),
+            new Vector3( 2f, -hh + 0.1f, -1f),
+            new Vector3( 0f, -hh + 0.1f,  1f),
+        };
+
+        for (int i = 0; i < dirPositions.Length; i++)
+        {
+            if (directionalPrefab == null) break;
+            var inst = (GameObject)PrefabUtility.InstantiatePrefab(directionalPrefab);
+            inst.transform.SetParent(triggerObj.transform);
+            inst.transform.localPosition = dirPositions[i] - triggerObj.transform.localPosition;
+            inst.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f); // shoot upward
+            inst.name = $"ConfettiDir_{i}";
+        }
     }
 
     // ─────────────────────────────────────────────
@@ -913,7 +1250,6 @@ public class CyberTunnelBuilder : EditorWindow
         Vector3 lobbyFloorCenter = new Vector3(0, 0, -16f);
         GameObject outsideFloor = CreateBox("OutsideFloor", entry.transform,
             lobbyFloorCenter, new Vector3(40f, wt, 24f), matFloor);
-        BuildDiscoTileFloor(entry.transform, lobbyFloorCenter, 40f, 24f, wt, "LobbyDiscoTiles");
         BuildDiscoBall(entry.transform, new Vector3(0f, 5.2f, -16f));
         CreateBox("OutsideWall_L", entry.transform,
             new Vector3(-20f, 3f, -16f), new Vector3(wt, 6f, 24f), matWall);
@@ -1054,6 +1390,16 @@ public class CyberTunnelBuilder : EditorWindow
         roomRT.pivot = new Vector2(0f, 1f);
         roomRT.anchoredPosition = new Vector2(20f, -15f);
 
+        // Global attempts text (under room label)
+        GameObject attemptsObj = CreateUIText("AttemptsText", hudCanvas.transform,
+            Vector2.zero, new Vector2(280, 34), "Attempts Left: 5", 18,
+            new Color(1f, 0.75f, 0.4f), TextAlignmentOptions.Left);
+        RectTransform attemptsRT = attemptsObj.GetComponent<RectTransform>();
+        attemptsRT.anchorMin = new Vector2(0f, 1f);
+        attemptsRT.anchorMax = new Vector2(0f, 1f);
+        attemptsRT.pivot = new Vector2(0f, 1f);
+        attemptsRT.anchoredPosition = new Vector2(20f, -48f);
+
         // Interact prompt
         GameObject promptObj = CreateUIText("InteractPrompt", hudCanvas.transform,
             new Vector2(0, -80), new Vector2(300, 40), "Press [E] to interact", 18,
@@ -1087,6 +1433,7 @@ public class CyberTunnelBuilder : EditorWindow
         SerializedObject hudSo = new SerializedObject(hud);
         hudSo.FindProperty("timerText").objectReferenceValue = timerObj.GetComponent<TextMeshProUGUI>();
         hudSo.FindProperty("roomText").objectReferenceValue = roomTextObj.GetComponent<TextMeshProUGUI>();
+        hudSo.FindProperty("attemptsText").objectReferenceValue = attemptsObj.GetComponent<TextMeshProUGUI>();
         hudSo.FindProperty("interactPromptText").objectReferenceValue = promptObj.GetComponent<TextMeshProUGUI>();
         hudSo.FindProperty("crosshair").objectReferenceValue = crosshair;
 
@@ -1118,6 +1465,30 @@ public class CyberTunnelBuilder : EditorWindow
         hudSo.FindProperty("completionPanel").objectReferenceValue = completionPanel;
         hudSo.FindProperty("completionTimeText").objectReferenceValue = compTime.GetComponent<TextMeshProUGUI>();
         hudSo.FindProperty("completionMessageText").objectReferenceValue = compMsg.GetComponent<TextMeshProUGUI>();
+        hudSo.ApplyModifiedPropertiesWithoutUndo();
+
+        // --- Lose panel ---
+        GameObject losePanel = CreatePanel("LosePanel", hudCanvas.transform,
+            new Color(0f, 0f, 0f, 1f));
+        losePanel.SetActive(false);
+
+        CreateUIText("LoseTitle", losePanel.transform,
+            new Vector2(0, 110), new Vector2(700, 70), "YOU LOST", 48,
+            new Color(1f, 0.2f, 0.2f), TextAlignmentOptions.Center);
+
+        GameObject loseMsg = CreateUIText("LoseMessage", losePanel.transform,
+            new Vector2(0, 10), new Vector2(740, 120),
+            "You used all attempts.", 26,
+            Color.white, TextAlignmentOptions.Center);
+
+        GameObject tryAgainBtn = CreateButton("TryAgainButton", losePanel.transform,
+            new Vector2(0, -120), new Vector2(260, 60), "TRY AGAIN",
+            new Color(0.2f, 0.5f, 0.2f));
+
+        hudSo = new SerializedObject(hud);
+        hudSo.FindProperty("losePanel").objectReferenceValue = losePanel;
+        hudSo.FindProperty("loseMessageText").objectReferenceValue = loseMsg.GetComponent<TextMeshProUGUI>();
+        hudSo.FindProperty("tryAgainButton").objectReferenceValue = tryAgainBtn.GetComponent<Button>();
         hudSo.ApplyModifiedPropertiesWithoutUndo();
 
         // --- PUZZLE UI Canvas ---
@@ -1400,6 +1771,13 @@ public class CyberTunnelBuilder : EditorWindow
         SerializedObject amSo = new SerializedObject(audioObj.GetComponent<AudioManager>());
         amSo.FindProperty("musicSource").objectReferenceValue = ms;
         amSo.FindProperty("sfxSource").objectReferenceValue = sfx;
+        amSo.FindProperty("backgroundMusicClip").objectReferenceValue = GetDefaultMusicClip();
+        amSo.FindProperty("doorOpenClip").objectReferenceValue = GetDoorOpenCloseSfxClip();
+        amSo.FindProperty("doorCloseClip").objectReferenceValue = GetDoorOpenCloseSfxClip();
+        amSo.FindProperty("levelUnlockedClip").objectReferenceValue = GetLevelUnlockedSfxClip();
+        amSo.FindProperty("gameLostClip").objectReferenceValue = GetGameLostSfxClip();
+        amSo.FindProperty("lavaSizzleClip").objectReferenceValue = GetLavaSizzleSfxClip();
+        amSo.FindProperty("lavaScreamClip").objectReferenceValue = GetLavaScreamSfxClip();
         amSo.ApplyModifiedPropertiesWithoutUndo();
 
         // Canvas
@@ -1451,11 +1829,6 @@ public class CyberTunnelBuilder : EditorWindow
             new Vector2(0, -165), new Vector2(300, 55), "QUIT",
             new Color(0.5f, 0.1f, 0.1f));
 
-        // Version text
-        CreateUIText("Version", mainPanel.transform,
-            new Vector2(0, -230), new Vector2(300, 25), "v1.0 - University Project", 14,
-            new Color(0.3f, 0.3f, 0.4f), TextAlignmentOptions.Center);
-
         // -- Settings Panel --
         GameObject settingsPanel = new GameObject("SettingsPanel");
         settingsPanel.transform.SetParent(canvas.transform);
@@ -1502,7 +1875,7 @@ public class CyberTunnelBuilder : EditorWindow
 
         CreateUIText("CreditsBody", creditsPanel.transform,
             new Vector2(0, 20), new Vector2(400, 200),
-            "CYBERTUNNEL\n\nDeveloped by:\n- Alexandru Nagy\n- Alexandra Satalan\n- Cristian Rusu\n- Robert Peternel\n- Andrei Apostol\n\nUniversity Project - GUI - 2026\nBuilt with Unity URP",
+            "CYBERTUNNEL\n\nDeveloped by:\n- Alexandru Nagy\n- Alexandra Satalan\n- Cristian Rusu\n- Robert Peternel\n- Andrei Apostol",
             16, new Color(0.7f, 0.8f, 0.9f), TextAlignmentOptions.Center);
 
         GameObject backCreditsBtn = CreateButton("BackCredits", creditsPanel.transform,
@@ -1959,7 +2332,7 @@ public class CyberTunnelBuilder : EditorWindow
     static GameObject CreateSlider(string name, Transform parent, Vector2 position, Vector2 size)
     {
         GameObject sliderObj = new GameObject(name);
-        sliderObj.transform.SetParent(parent);
+        sliderObj.transform.SetParent(parent, false);
 
         RectTransform rt = sliderObj.AddComponent<RectTransform>();
         rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
@@ -1968,7 +2341,7 @@ public class CyberTunnelBuilder : EditorWindow
 
         // Background
         GameObject bgObj = new GameObject("Background");
-        bgObj.transform.SetParent(sliderObj.transform);
+        bgObj.transform.SetParent(sliderObj.transform, false);
         RectTransform bgRT = bgObj.AddComponent<RectTransform>();
         bgRT.anchorMin = new Vector2(0, 0.25f);
         bgRT.anchorMax = new Vector2(1, 0.75f);
@@ -1979,7 +2352,7 @@ public class CyberTunnelBuilder : EditorWindow
 
         // Fill Area
         GameObject fillArea = new GameObject("Fill Area");
-        fillArea.transform.SetParent(sliderObj.transform);
+        fillArea.transform.SetParent(sliderObj.transform, false);
         RectTransform faRT = fillArea.AddComponent<RectTransform>();
         faRT.anchorMin = new Vector2(0, 0.25f);
         faRT.anchorMax = new Vector2(1, 0.75f);
@@ -1987,7 +2360,7 @@ public class CyberTunnelBuilder : EditorWindow
         faRT.offsetMax = Vector2.zero;
 
         GameObject fill = new GameObject("Fill");
-        fill.transform.SetParent(fillArea.transform);
+        fill.transform.SetParent(fillArea.transform, false);
         RectTransform fillRT = fill.AddComponent<RectTransform>();
         fillRT.anchorMin = Vector2.zero;
         fillRT.anchorMax = Vector2.one;
@@ -1998,7 +2371,7 @@ public class CyberTunnelBuilder : EditorWindow
 
         // Handle area
         GameObject handleArea = new GameObject("Handle Slide Area");
-        handleArea.transform.SetParent(sliderObj.transform);
+        handleArea.transform.SetParent(sliderObj.transform, false);
         RectTransform haRT = handleArea.AddComponent<RectTransform>();
         haRT.anchorMin = Vector2.zero;
         haRT.anchorMax = Vector2.one;
@@ -2006,9 +2379,12 @@ public class CyberTunnelBuilder : EditorWindow
         haRT.offsetMax = new Vector2(-10, 0);
 
         GameObject handle = new GameObject("Handle");
-        handle.transform.SetParent(handleArea.transform);
+        handle.transform.SetParent(handleArea.transform, false);
         RectTransform hRT = handle.AddComponent<RectTransform>();
-        hRT.sizeDelta = new Vector2(20, 0);
+        hRT.anchorMin = new Vector2(0.5f, 0f);
+        hRT.anchorMax = new Vector2(0.5f, 1f);
+        hRT.pivot = new Vector2(0.5f, 0.5f);
+        hRT.sizeDelta = new Vector2(20f, 0f);
         Image handleImg = handle.AddComponent<Image>();
         handleImg.color = new Color(0f, 1f, 0.6f);
 
@@ -2016,6 +2392,7 @@ public class CyberTunnelBuilder : EditorWindow
         slider.fillRect = fillRT;
         slider.handleRect = hRT;
         slider.targetGraphic = handleImg;
+        slider.direction = Slider.Direction.LeftToRight;
         slider.minValue = 0;
         slider.maxValue = 1;
         slider.value = 0.7f;

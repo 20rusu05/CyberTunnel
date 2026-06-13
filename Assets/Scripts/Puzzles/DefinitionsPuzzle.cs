@@ -101,6 +101,8 @@ public class DefinitionsPuzzle : PuzzleBase
 
         if (isCorrect)
             correctAnswers++;
+        else
+            GameManager.Instance?.ConsumeGlobalAttempt();
 
         totalAnswered++;
         currentDefinitionIndex++;
